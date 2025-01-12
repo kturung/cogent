@@ -2,7 +2,7 @@
     "name": "cogent",
     "displayName": "Cogent",
     "description": "Cogent is a Copilot extension that gives it agenting capabilities like executing commands, editing and reading files, and more.",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "engines": {
         "vscode": "^1.95.0"
     },
