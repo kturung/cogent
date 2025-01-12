@@ -23,8 +23,14 @@ export function isTsxToolUserMetadata(obj: unknown): obj is TsxToolUserMetadata 
 
 export function registerToolUserChatParticipant(context: vscode.ExtensionContext) {
     const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, chatContext: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
-
-        const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'claude-3.5-sonnet' });
+        const MODEL_SELECTOR: vscode.LanguageModelChatSelector = { vendor: 'copilot', family: 'claude-3.5-sonnet' };
+        let [model] = await vscode.lm.selectChatModels(MODEL_SELECTOR);
+        if (!model) {
+            [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4o' });
+            if (!model) {
+                stream.markdown("No language model available.")
+            }
+        }
 
         const useFullWorkspace = vscode.workspace.getConfiguration('cogent').get('use_full_workspace', false);
         const tools = vscode.lm.tools.filter(tool =>
@@ -109,7 +115,7 @@ export function registerToolUserChatParticipant(context: vscode.ExtensionContext
                 if (toolResultMetadata?.length) {
                     toolResultMetadata.forEach(meta => accumulatedToolResults[meta.toolCallId] = meta.result);
                 }
-                
+
                 return runWithTools();
             }
         };
@@ -135,7 +141,7 @@ export function registerToolUserChatParticipant(context: vscode.ExtensionContext
 
     const toolUser = vscode.chat.createChatParticipant('cogent.assistant', handler);
     toolUser.iconPath = vscode.Uri.joinPath(context.extensionUri, 'assets/cogent.jpeg');
-    
+
     // Register the apply changes command
     const applyChangesCommand = vscode.commands.registerCommand('cogent.applyChanges', async () => {
         await vscode.workspace.saveAll();

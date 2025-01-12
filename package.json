@@ -2,7 +2,7 @@
     "name": "cogent",
     "displayName": "Cogent",
     "description": "Cogent is a Copilot extension that gives it agenting capabilities like executing commands, editing and reading files, and more.",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "engines": {
         "vscode": "^1.95.0"
     },
@@ -63,17 +63,27 @@
                     "description": "Configure which tools should auto-confirm their operations without showing confirmation dialog",
                     "order": 2
                 },
+                "cogent.autoConfirmToolsCommandPatterns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "description": "Command pattern to auto confirm (e.g. 'npm install *', 'git status')"
+                    },
+                    "default": [],
+                    "description": "List of command patterns to auto confirm. Use * as wildcard. If empty, all commands will be auto-confirmed when autoConfirmTools.runCommand is enabled.",
+                    "order": 3
+                },
                 "cogent.debug": {
                     "type": "boolean",
                     "default": false,
                     "description": "Enable debug logging in the output channel",
-                    "order": 3
+                    "order": 4
                 },
                 "cogent.commandTimeout": {
                     "type": "number",
                     "default": 45,
                     "description": "Timeout in seconds for terminal commands",
-                    "order": 4
+                    "order": 5
                 }
             }
         },

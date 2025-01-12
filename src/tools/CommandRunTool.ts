@@ -21,6 +21,16 @@ function loadNodePty() {
     }
 }
 
+// Utility function to match command against pattern with wildcard support
+function matchCommandPattern(command: string, pattern: string): boolean {
+    // Convert wildcard pattern to regex
+    const regexPattern = pattern
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special regex chars
+        .replace(/\*/g, '.*'); // Convert * to .*
+    const regex = new RegExp(`^${regexPattern}$`);
+    return regex.test(command);
+}
+
 export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> {
     private static terminal: vscode.Terminal | undefined;
     private static nodePty = loadNodePty();
@@ -115,7 +125,7 @@ export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> 
             });
 
             ptyTerminal.show();
-            
+
             // Listen for process exit
             ptyProcess.onExit(() => {
                 clearTimeout(exitTimeout);
@@ -130,12 +140,21 @@ export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> 
         options: vscode.LanguageModelToolInvocationPrepareOptions<ICommandParams>,
         _token: vscode.CancellationToken
     ) {
-        const autoConfirm = vscode.workspace.getConfiguration('cogent').get('autoConfirmTools.runCommand', false);
-        
+        const config = vscode.workspace.getConfiguration('cogent');
+        const autoConfirm = config.get('autoConfirmTools.runCommand', false);
+
+        // Only proceed if auto-confirm is enabled
         if (autoConfirm) {
-            return {
-                invocationMessage: `Executing command: ${options.input.command}`
-            };
+            const patterns = config.get<string[]>('autoConfirmToolsCommandPatterns', []);
+
+            // If patterns list is empty or command matches any pattern, auto-confirm
+            if (patterns.length === 0 || patterns.some((pattern: string) =>
+                matchCommandPattern(options.input.command, pattern)
+            )) {
+                return {
+                    invocationMessage: `Executing command: ${options.input.command}`
+                };
+            }
         }
 
         return {
