@@ -69,10 +69,12 @@ Cogent can be as nosy or respectful as you want with your workspace:
 
 ![use_full_workspace](assets/use-full-workspace.png)
 
-- When `true`: Cogent loads your entire workspace upfront. Respects your .gitignore file
+- When `true`: Cogent loads your entire workspace upfront. Respects your .gitignore file and honors .gitkeep files
 - When `false`: Reads files on-demand. This is the default setting.
 
 > 💡 Tip: Disable for large workspaces unless you want Cogent to have a coffee break while loading!
+
+> 📌 Note: Cogent respects .gitkeep files! Even if a directory is listed in .gitignore, it will be included if it contains a .gitkeep file.
 
 ### Custom Rules
 
