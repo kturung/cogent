@@ -27,6 +27,35 @@ function readGitignore(workspacePath: string): string[] {
     }
 }
 
+function readGitkeep(workspacePath: string): Set<string> {
+    const logger = Logger.getInstance();
+    const gitkeepFiles = new Set<string>();
+
+    function findGitkeepFiles(dir: string) {
+        try {
+            const files = fs.readdirSync(dir);
+            files.forEach(file => {
+                const fullPath = path.join(dir, file);
+                const stat = fs.statSync(fullPath);
+                
+                if (stat.isDirectory()) {
+                    findGitkeepFiles(fullPath);
+                } else if (file === '.gitkeep') {
+                    // Add the directory containing .gitkeep
+                    const dirPath = path.relative(workspacePath, dir);
+                    gitkeepFiles.add(dirPath);
+                }
+            });
+        } catch (error) {
+            logger.error('Error reading directory for .gitkeep: ' + error);
+        }
+    }
+
+    findGitkeepFiles(workspacePath);
+    logger.debug('Found .gitkeep in directories: ' + JSON.stringify(Array.from(gitkeepFiles), null, 2));
+    return gitkeepFiles;
+}
+
 const defaultIgnored = [
     // Build and distribution
     'dist',
@@ -104,7 +133,18 @@ const defaultIgnored = [
 
 ];
 
-function isIgnored(filePath: string, ignorePatterns: string[]): boolean {
+function isIgnored(filePath: string, ignorePatterns: string[], gitkeepDirs: Set<string>): boolean {
+    // Check if any parent directory contains .gitkeep
+    const fileDir = path.dirname(filePath);
+    const isInGitkeep = Array.from(gitkeepDirs).some(dir => 
+        fileDir === dir || fileDir.startsWith(dir + path.sep)
+    );
+
+    // If file is in a .gitkeep directory, don't ignore it
+    if (isInGitkeep) {
+        return false;
+    }
+
     return ignorePatterns.some(pattern => {
         const cleanPattern = pattern.replace(/\/$/, '');
         const escaped = cleanPattern
@@ -120,16 +160,17 @@ interface FileDetails {
     contents: { [path: string]: string };
 }
 
-export function listImportantFiles(dir: string, level: number = 0, contents: { [path: string]: string } = {}, ignorePatterns?: string[]): FileDetails {
+export function listImportantFiles(dir: string, level: number = 0, contents: { [path: string]: string } = {}, ignorePatterns?: string[], gitkeepDirs?: Set<string>): FileDetails {
     const logger = Logger.getInstance();
     let structure = '';
     const list = fs.readdirSync(dir);
 
-    // Only read .gitignore at root level
+    // Only read .gitignore and .gitkeep at root level
     if (level === 0) {
         const gitignorePatterns = readGitignore(dir);
         const defaultIgnoredSet = new Set([...defaultIgnored, ...gitignorePatterns]);
         ignorePatterns = Array.from(defaultIgnoredSet);
+        gitkeepDirs = readGitkeep(dir);
         logger.debug('Root level ignore patterns: ' + JSON.stringify(ignorePatterns, null, 2));
     }
 
@@ -138,13 +179,13 @@ export function listImportantFiles(dir: string, level: number = 0, contents: { [
         const relativePath = path.relative(dir, filePath);
         const stat = fs.statSync(filePath);
 
-        if (isIgnored(relativePath, ignorePatterns || [])) {
+        if (isIgnored(relativePath, ignorePatterns || [], gitkeepDirs || new Set())) {
             return;
         }
 
         if (stat && stat.isDirectory()) {
             structure += '  '.repeat(level) + file + '/\n';
-            const subDirResult = listImportantFiles(filePath, level + 1, contents, ignorePatterns);
+            const subDirResult = listImportantFiles(filePath, level + 1, contents, ignorePatterns, gitkeepDirs);
             structure += subDirResult.structure;
             Object.assign(contents, subDirResult.contents);
         } else {
