@@ -64,7 +64,8 @@ export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> 
                 ]));
             }
 
-            const shell = os.platform() === 'win32' ? 'powershell' : 'zsh';
+            const isWindows = os.platform() === 'win32';
+            const shell = isWindows ? 'powershell.exe' : 'zsh';
             let output = '';
             let outputBuffer = '';
             let commandStarted = false;
@@ -82,19 +83,23 @@ export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> 
                 const filteredData = stripAnsi(this.filterPowerShellHeader(data));
                 outputBuffer += filteredData;
 
-                // Only start capturing output after the command is sent
-                if (commandStarted) {
+                if (isWindows) {
                     output += filteredData;
-                }
+                } else {
+                    // For zsh, only start capturing output after the command is sent
+                    if (commandStarted) {
+                        output += filteredData;
+                    }
 
-                // Check for shell prompt after command execution
-                if (commandStarted && this.isPrompt(outputBuffer, shell)) {
-                    // Remove the prompt from the output
-                    output = output.replace(this.PROMPT_PATTERNS[shell as keyof typeof this.PROMPT_PATTERNS], '');
-                    ptyProcess.kill();
-                    resolve(new vscode.LanguageModelToolResult([
-                        new vscode.LanguageModelTextPart(stripAnsi(output.trim()))
-                    ]));
+                    // Check for shell prompt after command execution
+                    if (commandStarted && this.isPrompt(outputBuffer, 'zsh')) {
+                        // Remove the prompt from the output
+                        output = output.replace(this.PROMPT_PATTERNS.zsh, '');
+                        ptyProcess.kill();
+                        resolve(new vscode.LanguageModelToolResult([
+                            new vscode.LanguageModelTextPart(stripAnsi(output.trim()))
+                        ]));
+                    }
                 }
 
                 writeEmitter.fire(data);
@@ -109,6 +114,13 @@ export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> 
                         outputBuffer = '';
                         ptyProcess.write(`${options.input.command}\r`);
                         commandStarted = true;
+
+                        // For PowerShell, add exit command after the main command
+                        if (isWindows) {
+                            setTimeout(() => {
+                                ptyProcess.write('\rexit\r');
+                            }, 100);
+                        }
                     },
                     close: () => {
                         ptyProcess.kill();
@@ -143,6 +155,16 @@ export class CommandRunTool implements vscode.LanguageModelTool<ICommandParams> 
             });
 
             ptyTerminal.show();
+            
+            // For PowerShell, listen for process exit
+            if (isWindows) {
+                ptyProcess.onExit(() => {
+                    clearTimeout(exitTimeout);
+                    resolve(new vscode.LanguageModelToolResult([
+                        new vscode.LanguageModelTextPart(stripAnsi(output) || 'Command completed')
+                    ]));
+                });
+            }
         });
     }
 
